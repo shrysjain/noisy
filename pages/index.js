@@ -1,124 +1,121 @@
-import React, { useState } from "react";
-import Jimp from "jimp";
-import CryptoJS from "crypto-js";
-import Image from "next/image";
+import { useState } from "react";
+import axios from "axios";
 
-const Home = () => {
+export default function Home() {
   const [file, setFile] = useState(null);
-  const [encodedFile, setEncodedFile] = useState(null);
-  const [decodedFile, setDecodedFile] = useState(null);
-  const [customKey, setCustomKey] = useState("");
+  const [encodedPath, setEncodedPath] = useState("");
+  const [decodedPath, setDecodedPath] = useState("");
+  const [error, setError] = useState("");
 
   const handleFileChange = (e) => {
     setFile(e.target.files[0]);
   };
 
-  const handleKeyChange = (e) => {
-    setCustomKey(e.target.value);
-  };
-
-  const getKey = () => {
-    return customKey || process.env.NEXT_PUBLIC_ENCRYPTION_KEY;
-  };
-
-  const encrypt = (data) => {
-    return CryptoJS.AES.encrypt(data, getKey()).toString();
-  };
-
-  const decrypt = (data) => {
-    const bytes = CryptoJS.AES.decrypt(data, getKey());
-    return bytes.toString(CryptoJS.enc.Utf8);
-  };
-
   const handleEncode = async () => {
-    const reader = new FileReader();
-    reader.onload = async (e) => {
-      const data = e.target.result;
-      const encryptedData = encrypt(data);
+    try {
+      setError("");
+      const formData = new FormData();
+      formData.append("file", file);
 
-      const imageSize = Math.ceil(Math.sqrt(encryptedData.length));
-      const image = await new Jimp(imageSize, imageSize);
-
-      for (let i = 0; i < encryptedData.length; i++) {
-        const x = i % imageSize;
-        const y = Math.floor(i / imageSize);
-        const charCode = encryptedData.charCodeAt(i);
-        image.setPixelColor(
-          Jimp.rgbaToInt(charCode, charCode, charCode, 255),
-          x,
-          y
-        );
-      }
-
-      image.getBase64(Jimp.MIME_PNG, (err, src) => {
-        setEncodedFile(src);
+      const response = await axios.post("/api/encode", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
       });
-    };
-    reader.readAsDataURL(file);
+
+      setEncodedPath(response.data.path);
+    } catch (error) {
+      setError("Failed to encode the file");
+    }
   };
 
   const handleDecode = async () => {
-    const image = await Jimp.read(decodedFile);
-    let encryptedData = "";
+    try {
+      setError("");
+      const formData = new FormData();
+      formData.append("file", file);
 
-    image.scan(0, 0, image.bitmap.width, image.bitmap.height, (x, y, idx) => {
-      const red = image.bitmap.data[idx];
-      encryptedData += String.fromCharCode(red);
-    });
+      const response = await axios.post("/api/decode", formData, {
+        headers: {
+          "Content-Type": "multipart/form-data",
+        },
+      });
 
-    const decryptedData = decrypt(encryptedData);
-    const blob = new Blob([decryptedData], {
-      type: "application/octet-stream",
-    });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "decoded_file";
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      setDecodedPath(response.data.path);
+    } catch (error) {
+      setError("Failed to decode the file");
+    }
   };
 
   return (
     <div>
-      <h1>
-        <b>noisy</b>
-      </h1>
-
-      <div>
-        <h2>Encoding</h2>
-        <input type="file" onChange={handleFileChange} />
-        <input
-          type="text"
-          placeholder="Custom Encryption Key"
-          onChange={handleKeyChange}
-        />
-        <button onClick={handleEncode}>Encode File</button>
-        {encodedFile && (
-          <div>
-            <h3>Encoded Image</h3>
-            <Image src={encodedFile} alt="Encoded" />
-          </div>
-        )}
-      </div>
-
-      <div>
-        <h2>Decoding</h2>
+      <div className="max-w-xl mx-auto mt-8 p-8 bg-white rounded-lg shadow-md">
+        <h1 className="text-3xl font-bold mb-6 text-gray-800">Noisy</h1>
+        <p className="text-sm text-slate-600 mb-6">
+          Securely encode files into images, preserving extensions, and compress
+          any size file into seemingly meaningless noise
+        </p>
+        {error && <p className="text-red-500 mb-4">{error}</p>}
         <input
           type="file"
-          onChange={(e) =>
-            setDecodedFile(URL.createObjectURL(e.target.files[0]))
-          }
+          onChange={handleFileChange}
+          className="mb-4 w-full text-sm text-gray-500
+          file:mr-4 file:py-2 file:px-4
+          file:rounded-full file:border-0
+          file:text-sm file:font-semibold
+          file:bg-violet-50 file:text-violet-700
+          hover:file:bg-violet-100"
         />
-        <input
-          type="text"
-          placeholder="Custom Encryption Key"
-          onChange={handleKeyChange}
-        />
-        <button onClick={handleDecode}>Decode File</button>
+        <div className="flex space-x-4 mb-6">
+          <button
+            onClick={handleEncode}
+            className="flex-1 bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded transition duration-300"
+          >
+            Encode
+          </button>
+          <button
+            onClick={handleDecode}
+            className="flex-1 bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded transition duration-300"
+          >
+            Decode
+          </button>
+        </div>
+        {encodedPath && (
+          <p className="mb-2">
+            <span className="font-semibold">Encoded Image:</span>{" "}
+            <a
+              href={encodedPath}
+              download
+              className="text-blue-600 hover:text-blue-800 underline"
+            >
+              CLICK TO DOWNLOAD
+            </a>
+          </p>
+        )}
+        {decodedPath && (
+          <p>
+            <span className="font-semibold">Decoded File:</span>{" "}
+            <a
+              href={decodedPath}
+              download
+              className="text-blue-600 hover:text-blue-800 underline"
+            >
+              CLICK TO DOWNLOAD
+            </a>
+          </p>
+        )}
       </div>
+      <footer className="bg-gray-100 py-4 px-6 text-center text-sm text-gray-600">
+        developed with ❤️ by{" "}
+        <a
+          href="https://shrysjain.me"
+          className="text-blue-600 hover:text-blue-800 underline"
+          target="_blank"
+        >
+          shreyas jain
+        </a>{" "}
+        &bull; all rights reserved
+      </footer>
     </div>
   );
-};
-
-export default Home;
+}
